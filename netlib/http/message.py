@@ -1,11 +1,9 @@
 from __future__ import absolute_import, print_function, division
-
 import warnings
-
+import cgi
 import six
-
+from .headers import Headers
 from .. import encoding, utils
-
 
 CONTENT_MISSING = 0
 
@@ -19,6 +17,14 @@ else:
 
 
 class MessageData(object):
+    def __init__(self, headers, raw_content):
+        if not headers:
+            headers = Headers()
+        assert isinstance(headers, Headers)
+        self.headers = headers
+
+        self.raw_content = raw_content
+
     def __eq__(self, other):
         if isinstance(other, MessageData):
             return self.__dict__ == other.__dict__
@@ -55,19 +61,45 @@ class Message(object):
         self.data.headers = h
 
     @property
+    def raw_content(self):
+        """
+        The raw, unmodified HTTP message body
+
+        See also: :py:attr:`content`, :py:attr:`text`
+        """
+        return self.data.raw_content
+
+    @raw_content.setter
+    def raw_content(self, raw_content):
+        self.data.raw_content = raw_content
+        if isinstance(raw_content, bytes):
+            self.headers["content-length"] = str(len(raw_content))
+
+    @property
     def content(self):
         """
-        The raw (encoded) HTTP message body
+        The (decoded) HTTP message body.
+        If the Content-Encoding is invalid, identity encoding is used.
 
-        See also: :py:attr:`text`
+        Decoded contents are not cached, so accessing this attribute repeatedly is relatively expensive.
+
+        See also: :py:attr:`raw_content`, :py:attr:`text`
         """
-        return self.data.content
+        ce = self.headers.get("content-encoding")
+        if ce:
+            try:
+                return encoding.decode(ce, self.raw_content)
+            except encoding.CodecException:
+                pass
+        return self.raw_content
 
     @content.setter
     def content(self, content):
-        self.data.content = content
-        if isinstance(content, bytes):
-            self.headers["content-length"] = str(len(content))
+        ce = self.headers.get("content-encoding")
+        try:
+            self.raw_content = encoding.encode(ce, content)
+        except encoding.CodecException:
+            self.raw_content = content
 
     @property
     def http_version(self):
@@ -103,22 +135,51 @@ class Message(object):
         self.data.timestamp_end = timestamp_end
 
     @property
+    def charset(self):
+        """
+        Determine the text encoding from the HTTP Content-Type header.
+        Encodings specified in the HTTP body are not considered (yet).
+
+        Caveats:
+            This returns the text encoding, which is _not_ the HTTP Content-Encoding.
+        """
+
+        content_type = self.headers.get('content-type')
+        if not content_type:
+            return None
+
+        content_type, params = cgi.parse_header(content_type)
+        if 'charset' in params:
+            return params['charset'].strip("'\"")
+        if 'text' in content_type:
+            return 'ISO-8859-1'
+        return None
+
+    @property
     def text(self):
         """
         The decoded HTTP message body.
+
         Decoded contents are not cached, so accessing this attribute repeatedly is relatively expensive.
 
-        .. note::
-            This is not implemented yet.
-
-        See also: :py:attr:`content`, :py:class:`decoded`
+        See also: :py:attr:`content`, :py:class:`raw_content`
         """
         # This attribute should be called text, because that's what requests does.
-        raise NotImplementedError()
+        try:
+            return self.content.decode(self.charset, "strict")
+        except (TypeError, UnicodeError):
+            # UnicodeError: The encoding does not fit
+            # TypeError: self.encoding is None
+            return self.content.decode("utf-8", "surrogateescape")
 
     @text.setter
     def text(self, text):
-        raise NotImplementedError()
+        try:
+            self.content = text.encode(self.charset, "strict")
+        except (TypeError, UnicodeError):
+            # UnicodeError: The encoding does not fit
+            # TypeError: self.encoding is None
+            self.content = text.encode("utf-8", "surrogateescape")
 
     def decode(self):
         """
@@ -127,16 +188,20 @@ class Message(object):
             action is taken.
 
             Returns:
-                True, if decoding succeeded.
-                False, otherwise.
+                The previous content encoding, if decoding succeeded.
+                False, decoding failed.
         """
+        # TODO: This should raise an exception rather than failing silently.
         ce = self.headers.get("content-encoding")
-        data = encoding.decode(ce, self.content)
-        if data is None:
+        if not ce:
             return False
-        self.content = data
-        self.headers.pop("content-encoding", None)
-        return True
+        try:
+            self.content = encoding.decode(ce, self.content)
+        except encoding.CodecException:
+            return False
+        else:
+            self.headers.pop("content-encoding", None)
+            return ce
 
     def encode(self, e):
         """
@@ -146,51 +211,35 @@ class Message(object):
                 True, if decoding succeeded.
                 False, otherwise.
         """
-        data = encoding.encode(e, self.content)
-        if data is None:
+        try:
+            self.content = encoding.encode(e, self.content)
+        except encoding.CodecException:
             return False
-        self.content = data
-        self.headers["content-encoding"] = e
-        return True
+        else:
+            self.headers["content-encoding"] = e
+            return True
 
     # Legacy
 
     @property
     def body(self):  # pragma: nocover
-        warnings.warn(".body is deprecated, use .content instead.", DeprecationWarning)
-        return self.content
+        warnings.warn(".body is deprecated, use .(raw_)content instead.", DeprecationWarning)
+        return self.raw_content
 
     @body.setter
     def body(self, body):  # pragma: nocover
-        warnings.warn(".body is deprecated, use .content instead.", DeprecationWarning)
-        self.content = body
+        warnings.warn(".body is deprecated, use .(raw_)content instead.", DeprecationWarning)
+        self.raw_content = body
 
 
-class decoded(object):
-    """
-    A context manager that decodes a request or response, and then
-    re-encodes it with the same encoding after execution of the block.
-
-    Example:
-
-    .. code-block:: python
-
-        with decoded(request):
-            request.content = request.content.replace("foo", "bar")
-    """
-
-    def __init__(self, message):
-        self.message = message
-        ce = message.headers.get("content-encoding")
-        if ce in encoding.ENCODINGS:
-            self.ce = ce
-        else:
-            self.ce = None
-
+class _decoded(object):
     def __enter__(self):
-        if self.ce:
-            self.message.decode()
+        pass
 
     def __exit__(self, type, value, tb):
-        if self.ce:
-            self.message.encode(self.ce)
+        pass
+
+
+def decoded(message):
+    warnings.warn("decoded() is deprecated, use .content instead (which is now always decoded).", DeprecationWarning)
+    return _decoded()

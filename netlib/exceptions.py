@@ -12,6 +12,7 @@ class NetlibException(Exception):
     """
     Base class for all exceptions thrown by netlib.
     """
+
     def __init__(self, message=None):
         super(NetlibException, self).__init__(message)
 
@@ -53,4 +54,8 @@ class TlsException(NetlibException):
 
 
 class InvalidCertificateException(TlsException):
+    pass
+
+
+class CodecException(NetlibException):
     pass

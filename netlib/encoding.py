@@ -5,35 +5,34 @@ from __future__ import absolute_import
 from io import BytesIO
 import gzip
 import zlib
-from .utils import always_byte_args
-
+from .exceptions import CodecException
 
 ENCODINGS = {"identity", "gzip", "deflate"}
 
 
 def decode(e, content):
     if not isinstance(content, bytes):
-        return None
+        raise CodecException("content must be bytes.")
     encoding_map = {
         "identity": identity,
         "gzip": decode_gzip,
         "deflate": decode_deflate,
     }
     if e not in encoding_map:
-        return None
+        raise CodecException("Unknown encoding: {}".format(e))
     return encoding_map[e](content)
 
 
 def encode(e, content):
     if not isinstance(content, bytes):
-        return None
+        raise CodecException("content must be bytes.")
     encoding_map = {
         "identity": identity,
         "gzip": encode_gzip,
         "deflate": encode_deflate,
     }
     if e not in encoding_map:
-        return None
+        raise CodecException("Unknown encoding: {}".format(e))
     return encoding_map[e](content)
 
 
@@ -49,8 +48,8 @@ def decode_gzip(content):
     gfile = gzip.GzipFile(fileobj=BytesIO(content))
     try:
         return gfile.read()
-    except (IOError, EOFError):
-        return None
+    except (IOError, EOFError) as e:
+        raise CodecException("Cannot decode gzip: {}".format(str(e)))
 
 
 def encode_gzip(content):
@@ -75,8 +74,8 @@ def decode_deflate(content):
             return zlib.decompress(content)
         except zlib.error:
             return zlib.decompress(content, -15)
-    except zlib.error:
-        return None
+    except zlib.error as e:
+        raise CodecException("Cannot decode deflate: {}".format(str(e)))
 
 
 def encode_deflate(content):
@@ -85,4 +84,4 @@ def encode_deflate(content):
     """
     return zlib.compress(content)
 
-__all__ = ["ENCODINGS", "encode", "decode"]
+__all__ = ["ENCODINGS", "encode", "decode", "CodecException"]
