@@ -20,7 +20,7 @@ def test_assemble_request():
     )
 
     with raises(HttpException):
-        assemble_request(treq(content=CONTENT_MISSING))
+        assemble_request(treq(raw_content=CONTENT_MISSING))
 
 
 def test_assemble_request_head():
@@ -40,7 +40,7 @@ def test_assemble_response():
     )
 
     with raises(HttpException):
-        assemble_response(tresp(content=CONTENT_MISSING))
+        assemble_response(tresp(raw_content=CONTENT_MISSING))
 
 
 def test_assemble_response_head():
@@ -76,7 +76,7 @@ def test_assemble_request_line():
 
 def test_assemble_request_headers():
     # https://github.com/mitmproxy/mitmproxy/issues/186
-    r = treq(content=b"")
+    r = treq(raw_content=b"")
     r.headers["Transfer-Encoding"] = "chunked"
     c = _assemble_request_headers(r.data)
     assert b"Transfer-Encoding" in c
@@ -95,7 +95,7 @@ def test_assemble_request_headers_host_header():
 
 def test_assemble_response_headers():
     # https://github.com/mitmproxy/mitmproxy/issues/186
-    r = tresp(content=b"")
+    r = tresp(raw_content=b"")
     r.headers["Transfer-Encoding"] = "chunked"
     c = _assemble_response_headers(r)
     assert b"Transfer-Encoding" in c

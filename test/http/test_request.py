@@ -213,7 +213,7 @@ class TestRequestUtils(object):
         assert "gzip" in request.headers["Accept-Encoding"]
 
     def test_get_urlencoded_form(self):
-        request = treq(content="foobar")
+        request = treq(raw_content="foobar")
         assert request.urlencoded_form is None
 
         request.headers["Content-Type"] = "application/x-www-form-urlencoded"
@@ -226,7 +226,7 @@ class TestRequestUtils(object):
         assert request.content
 
     def test_get_multipart_form(self):
-        request = treq(content="foobar")
+        request = treq(raw_content="foobar")
         assert request.multipart_form is None
 
         request.headers["Content-Type"] = "multipart/form-data"

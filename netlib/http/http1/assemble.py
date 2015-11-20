@@ -7,10 +7,10 @@ from .. import CONTENT_MISSING
 
 
 def assemble_request(request):
-    if request.content == CONTENT_MISSING:
+    if request.raw_content == CONTENT_MISSING:
         raise HttpException("Cannot assemble flow with CONTENT_MISSING")
     head = assemble_request_head(request)
-    body = b"".join(assemble_body(request.data.headers, [request.data.content]))
+    body = b"".join(assemble_body(request.data.headers, [request.data.raw_content]))
     return head + body
 
 
@@ -21,10 +21,10 @@ def assemble_request_head(request):
 
 
 def assemble_response(response):
-    if response.content == CONTENT_MISSING:
+    if response.raw_content == CONTENT_MISSING:
         raise HttpException("Cannot assemble flow with CONTENT_MISSING")
     head = assemble_response_head(response)
-    body = b"".join(assemble_body(response.data.headers, [response.data.content]))
+    body = b"".join(assemble_body(response.data.headers, [response.data.raw_content]))
     return head + body
 
 

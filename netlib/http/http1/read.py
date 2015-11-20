@@ -11,7 +11,7 @@ from .. import Request, Response, Headers
 def read_request(rfile, body_size_limit=None):
     request = read_request_head(rfile)
     expected_body_size = expected_http_body_size(request)
-    request.data.content = b"".join(read_body(rfile, expected_body_size, limit=body_size_limit))
+    request.data.raw_content = b"".join(read_body(rfile, expected_body_size, limit=body_size_limit))
     request.timestamp_end = time.time()
     return request
 
@@ -50,7 +50,7 @@ def read_request_head(rfile):
 def read_response(rfile, request, body_size_limit=None):
     response = read_response_head(rfile)
     expected_body_size = expected_http_body_size(request, response)
-    response.data.content = b"".join(read_body(rfile, expected_body_size, body_size_limit))
+    response.data.raw_content = b"".join(read_body(rfile, expected_body_size, body_size_limit))
     response.timestamp_end = time.time()
     return response
 

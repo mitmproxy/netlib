@@ -299,7 +299,7 @@ class TestReadHeaders(object):
 
 
 def test_read_chunked():
-    req = treq(content=None)
+    req = treq(raw_content=None)
     req.headers["Transfer-Encoding"] = "chunked"
 
     data = b"1\r\na\r\n0\r\n"

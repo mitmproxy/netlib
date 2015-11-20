@@ -4,6 +4,7 @@ import cgi
 import six
 from .headers import Headers
 from .. import encoding, utils
+from
 
 CONTENT_MISSING = 0
 
@@ -86,12 +87,10 @@ class Message(object):
         See also: :py:attr:`raw_content`, :py:attr:`text`
         """
         ce = self.headers.get("content-encoding")
-        if ce:
-            try:
-                return encoding.decode(ce, self.raw_content)
-            except encoding.CodecException:
-                pass
-        return self.raw_content
+        try:
+            return encoding.decode(ce, self.raw_content)
+        except encoding.CodecException:
+            return self.raw_content
 
     @content.setter
     def content(self, content):
@@ -168,9 +167,12 @@ class Message(object):
         try:
             return self.content.decode(self.charset, "strict")
         except (TypeError, UnicodeError):
-            # UnicodeError: The encoding does not fit
-            # TypeError: self.encoding is None
+            # UnicodeError: Cannot decode with the given data.
+            # TypeError: self.charset is None
             return self.content.decode("utf-8", "surrogateescape")
+        except AttributeError:
+            # AttributeError: content does not have a .decode() method (e.g. CONTENT_MISSING)
+            return self.content
 
     @text.setter
     def text(self, text):
@@ -178,8 +180,11 @@ class Message(object):
             self.content = text.encode(self.charset, "strict")
         except (TypeError, UnicodeError):
             # UnicodeError: The encoding does not fit
-            # TypeError: self.encoding is None
+            # TypeError: self.charset is None
             self.content = text.encode("utf-8", "surrogateescape")
+        except AttributeError:
+            # AttributeError: content does not have a .decode() method (e.g. CONTENT_MISSING)
+            self.content = text
 
     def decode(self):
         """
@@ -193,10 +198,8 @@ class Message(object):
         """
         # TODO: This should raise an exception rather than failing silently.
         ce = self.headers.get("content-encoding")
-        if not ce:
-            return False
         try:
-            self.content = encoding.decode(ce, self.content)
+            self.raw_content = encoding.decode(ce, self.raw_content)
         except encoding.CodecException:
             return False
         else:
